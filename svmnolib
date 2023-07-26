@@ -1,0 +1,181 @@
+import pandas as pd
+import numpy as np
+import re
+import math
+
+# Load dataset
+df = pd.read_excel('xxxxx.xlsx')
+df
+
+# Split dataset
+train_size = int(len(df) * 0.6)
+train_text = df['text'][:train_size]
+train_label = df['label'][:train_size]
+test_text = df['text'][train_size:]
+test_label = df['label'][train_size:]
+
+print(train_text)
+
+
+#Menghitung jumlah kata dalam tiap dokumen
+document_freq = {}
+for text in train_text:
+    words = set(text.split())
+    for word in words:
+        if word in document_freq:
+            document_freq[word] += 1
+        else:
+            document_freq[word] = 1
+
+# Menghitung vocabulary and IDF matrix
+vocabulary = {}
+idf_matrix = {}
+N = len(train_text)
+for i, text in enumerate(train_text):
+    words = text.split()
+    for word in words:
+        if word not in vocabulary:
+            vocabulary[word] = len(vocabulary)
+            idf_matrix[word] = math.log(N / document_freq[word], 10)
+
+# Build TF-IDF matrix for training data
+train_tfidf = np.zeros((len(train_text), len(vocabulary)))
+for i, text in enumerate(train_text):
+    words = text.split()
+    for word in words:
+        j = vocabulary[word]
+        tf = words.count(word) / len(words)
+        train_tfidf[i][j] = tf * idf_matrix[word]
+
+# Build TF-IDF matrix for testing data
+test_tfidf = np.zeros((len(test_text), len(vocabulary)))
+for i, text in enumerate(test_text):
+    words = text.split()
+    for word in words:
+        if word in vocabulary:
+            j = vocabulary[word]
+            tf = words.count(word) / len(words)
+            test_tfidf[i][j] = tf * idf_matrix[word]
+#print(i)
+#print(j)
+#print(words)
+print(train_tfidf)
+
+
+
+class SVM:
+
+    def __init__(self, C = 1.0):
+
+        self.C = C
+        self.bobot = 0
+        self.bias = 0
+
+
+    # Def Fungsi Hinge Loss
+    def hingeloss(self, bobot, bias, x, y):
+        # Regularizer term sesuai rumus
+        regularz = 0.5 * (bobot * bobot)
+
+        for i in range(x.shape[0]):
+            # Optimization term sesuai rumus
+            opt_term = y[i] * ((np.dot(bobot, x[i])) + bias)
+
+            # menghitung loss
+            nilai_loss = regularz + self.C * max(0, 1-opt_term)
+        return nilai_loss[0][0]
+
+    def fit(self, X, Y, batch_size=100, learning_rate=0.1, epochs=500):
+
+        number_of_features = X.shape[1]
+        number_of_samples = X.shape[0]
+
+        c = self.C
+
+        sampel = np.arange(number_of_samples)
+
+
+        np.random.shuffle(sampel)
+
+        # membuat array dengan jumlah feature yang ada
+        bobot = np.zeros((1, number_of_features))
+        bias = 0
+        losses = []
+
+        # Gradient Descent logic
+        #for i in range(epochs):
+        while(self.C < 0.0001):
+            # Menghitung the Hinge Loss
+            l = self.hingeloss(bobot, bias, X, Y)
+
+            # Menghitung semua loss
+            losses.append(l)
+
+            # menghitung data dari data ke 0 hingga total jumlah sample dengan batch size sebagai pengatur jumlah data yg diolah
+            for batch_initial in range(0, number_of_samples, batch_size):
+                gradbobot = 0
+                gradbias = 0
+
+                for j in range(batch_initial, batch_initial+ batch_size):
+                    if j < number_of_samples:
+                        x = sampel[j]
+                        ti = Y[x] * (np.dot(bobot, X[x].T) + bias)
+
+                        if ti > 1:
+                            gradbobot += 0
+                            gradbias += 0
+                        else:
+                            # Menghitung gradient bobot dan bias
+
+
+                            gradbobot += c * Y[x] * X[x]
+
+                            gradbias += c * Y[x]
+
+                # Update nilai bobot and bias
+                bobot = bobot - learning_rate * gradbobot
+                bias = bias + learning_rate * gradbias
+
+        delta_w = abs(self.w_new - self.w_old)
+        delta_b = abs(self.b_new - self.b_old)
+        self.C = max(delta_w, delta_b)
+        self.w_old = self.w_new
+        self.b_old = self.b_new
+        self.bobot = bobot
+        self.bias = bias
+
+        return self.bobot, self.bias, losses
+
+    def predict(self, X):
+
+        prediction = np.dot(X, self.bobot[0]) + self.bias # bobot.x + bias
+        return np.sign(prediction)
+
+print(train_tfidf)
+
+svm = SVM()
+bobot, bias, losses = svm.fit(train_tfidf, train_label)
+
+from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, confusion_matrix
+
+prediksi = svm.predict(test_tfidf)
+
+# Loss value
+lss = losses.pop()
+
+print("Loss:", lss)
+#print("Accuracy:", accuracy_score(prediksi, test_label))
+#recall = recall_score(test_label,prediksi)
+#print('recall_score: ', recall)
+#precision = precision_score(test_label,prediksi)
+#print('precision-score: ', precision)
+#cm = confusion_matrix(test_label,prediksi)
+#print('Confusion Matrix:\n', cm)
+
+print("bobot, bias:", [bobot, bias])
+
+from sklearn.metrics import classification_report
+
+print(classification_report(test_label, prediksi))
+print(confusion_matrix(test_label,prediksi))
+
